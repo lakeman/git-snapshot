@@ -1,0 +1,67 @@
+#!/bin/sh
+# Copyright (c) 2014, Jeremy Lakeman
+
+USAGE=''
+LONG_USAGE='Create a snapshot of the entire working directory'
+SUBDIRECTORY_OK=Yes
+
+START_DIR=`pwd`
+. git-sh-setup
+. git-sh-i18n
+require_work_tree
+cd_to_toplevel
+
+head_parent=''
+head='no commit'
+src_branch='detached'
+
+if src_branch=$(git symbolic-ref --quiet HEAD)
+then
+	src_branch=${src_branch#refs/heads/}
+fi
+# get branch name while doing rebase?
+
+# refs/heads/snapshots/ ? can then delete like a normal branch
+dest_branch="refs/snapshots/${src_branch}"
+
+export GIT_INDEX_FILE="${GIT_DIR}/indexsnapshot"
+
+no_changes() {
+	git diff-index --quiet --cached $dest_branch -- &&
+	git diff-files --quiet &&
+	test -z "$(git ls-files -o -z --exclude-standard)"
+}
+
+#or something like; git update-index -q --refresh --add
+git add --all .
+
+if head_commit=$(git rev-parse --verify HEAD)
+then
+	head=$(git rev-list --oneline -n 1 HEAD --)
+fi
+
+if parent_commit=$(git rev-parse --quiet --verify $dest_branch)
+then
+	snapshot_parent="-p $parent_commit"
+	if git merge-base --is-ancestor "$head_commit" "$parent_commit"
+	then
+		if no_changes
+		then
+			exit 0
+		fi
+	else
+		head_parent="-p $head_commit"
+	fi
+else
+	head_parent="-p $head_commit"
+	snapshot_parent=""
+fi
+
+tree=$(git write-tree) &&
+commit=$(printf 'snapshot of %s: %s\n' "$src_branch" "$head" |
+	git commit-tree $tree $snapshot_parent $head_parent) ||
+	die "$(gettext "Cannot save the current index state")"
+
+git update-ref -m "Snapshot" $dest_branch $commit
+
+printf 'Created snapshot of %s as %s\n' "$head" "$commit"
