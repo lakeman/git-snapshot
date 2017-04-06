@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (c) 2014, Jeremy Lakeman
+# Copyright (c) 2014, Jeremy Lakeman. License; http://www.wtfpl.net/txt/copying/
 
 USAGE=''
 LONG_USAGE='Create a snapshot of the entire working directory'
@@ -28,7 +28,6 @@ export GIT_INDEX_FILE="${GIT_DIR}/indexsnapshot"
 
 no_changes() {
 	git diff-index --quiet --cached $dest_branch -- &&
-	git diff-files --quiet &&
 	test -z "$(git ls-files -o -z --exclude-standard)"
 }
 
@@ -38,30 +37,26 @@ git add --all .
 if head_commit=$(git rev-parse --verify HEAD)
 then
 	head=$(git rev-list --oneline -n 1 HEAD --)
+	head_parent="-p $head_commit"
 fi
 
 if parent_commit=$(git rev-parse --quiet --verify $dest_branch)
 then
-	snapshot_parent="-p $parent_commit"
 	if git merge-base --is-ancestor "$head_commit" "$parent_commit"
 	then
-		if no_changes
+		if no_changes $dest_branch
 		then
+			printf 'No changes'
 			exit 0
 		fi
-	else
-		head_parent="-p $head_commit"
+		head_parent="-p $parent_commit"
 	fi
-else
-	head_parent="-p $head_commit"
-	snapshot_parent=""
 fi
 
 tree=$(git write-tree) &&
 commit=$(printf 'snapshot of %s: %s\n' "$src_branch" "$head" |
-	git commit-tree $tree $snapshot_parent $head_parent) ||
+	git commit-tree $tree $head_parent) ||
 	die "$(gettext "Cannot save the current index state")"
+printf 'Created snapshot of %s: %s (%s)\n' "$src_branch" "$head" "$commit"
 
-git update-ref -m "Snapshot" $dest_branch $commit
-
-printf 'Created snapshot of %s as %s\n' "$head" "$commit"
+git update-ref --create-reflog -m "Snapshot" $dest_branch $commit
