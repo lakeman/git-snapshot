@@ -15,9 +15,9 @@ head_parent=''
 head='no commit'
 src_branch='detached'
 
-if src_branch=$(git symbolic-ref --quiet HEAD)
+if tmp_branch=$(git symbolic-ref --quiet HEAD)
 then
-	src_branch=${src_branch#refs/heads/}
+	src_branch=${tmp_branch#refs/heads/}
 fi
 # get branch name while doing rebase?
 
